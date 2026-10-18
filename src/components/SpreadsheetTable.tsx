@@ -9,6 +9,10 @@ import {
   CheckCircle2,
   FileText,
   FileSpreadsheet,
+  Search,
+  Filter,
+  Calculator,
+  X,
 } from "lucide-react";
 import { DocumentItem, ExtractedData } from "@/types/rekap";
 import { formatCurrency, cleanNumericValue } from "@/lib/utils";
@@ -33,6 +37,8 @@ export function SpreadsheetTable({
     field: keyof ExtractedData;
   } | null>(null);
   const [tempValue, setTempValue] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   const startEditing = (id: string, field: keyof ExtractedData, initialVal: any) => {
     setEditingCell({ id, field });
@@ -64,6 +70,24 @@ export function SpreadsheetTable({
     }
   };
 
+  const handleSyncTotals = () => {
+    let syncedCount = 0;
+    items.forEach((item) => {
+      const subtotal = item.extractedData.subtotal || 0;
+      const tax = item.extractedData.tax || 0;
+      const calculated = subtotal + tax;
+      if (subtotal > 0 && item.extractedData.totalAmount !== calculated) {
+        onUpdateItem(item.id, { totalAmount: calculated });
+        syncedCount++;
+      }
+    });
+    if (syncedCount > 0) {
+      alert(`Berhasil menyinkronkan total (Subtotal + Pajak) pada ${syncedCount} baris.`);
+    } else {
+      alert("Semua nominal total sudah sinkron dengan Subtotal + Pajak.");
+    }
+  };
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
@@ -86,31 +110,104 @@ export function SpreadsheetTable({
     );
   }
 
-  // Calculate summary metrics
-  const totalSubtotal = items.reduce((acc, i) => acc + (i.extractedData.subtotal || 0), 0);
-  const totalTax = items.reduce((acc, i) => acc + (i.extractedData.tax || 0), 0);
-  const grandTotal = items.reduce((acc, i) => acc + (i.extractedData.totalAmount || 0), 0);
+  // Extract unique categories
+  const categories = Array.from(
+    new Set(items.map((i) => i.extractedData.category).filter(Boolean))
+  );
+
+  // Filter items based on search and category
+  const filteredItems = items.filter((item) => {
+    const query = searchQuery.toLowerCase().trim();
+    const matchesSearch =
+      !query ||
+      item.fileName.toLowerCase().includes(query) ||
+      item.extractedData.invoiceNumber.toLowerCase().includes(query) ||
+      item.extractedData.vendorName.toLowerCase().includes(query) ||
+      item.extractedData.notes.toLowerCase().includes(query);
+
+    const matchesCategory =
+      selectedCategory === "all" ||
+      item.extractedData.category?.toLowerCase() === selectedCategory.toLowerCase();
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // Calculate summary metrics on filtered items
+  const totalSubtotal = filteredItems.reduce((acc, i) => acc + (i.extractedData.subtotal || 0), 0);
+  const totalTax = filteredItems.reduce((acc, i) => acc + (i.extractedData.tax || 0), 0);
+  const grandTotal = filteredItems.reduce((acc, i) => acc + (i.extractedData.totalAmount || 0), 0);
 
   return (
     <div className="w-full space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Table Controls & Filter Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-slate-800">
             Tabel Review & Koreksi Interaktif
           </h3>
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-            {items.length} Baris
+            {filteredItems.length} dari {items.length} Baris
           </span>
         </div>
 
-        <button
-          onClick={onAddNewRow}
-          type="button"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm"
-        >
-          <Plus className="h-3.5 w-3.5 text-blue-600" />
-          <span>Tambah Baris</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleSyncTotals}
+            type="button"
+            title="Hitung ulang otomatis Total = Subtotal + Pajak"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-xs"
+          >
+            <Calculator className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Sinkron Total</span>
+          </button>
+
+          <button
+            onClick={onAddNewRow}
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-xs"
+          >
+            <Plus className="h-3.5 w-3.5 text-blue-600" />
+            <span>Tambah Baris</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Search and Category Filter Toolbar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5 shadow-2xs">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari nomor invoice, vendor, atau catatan..."
+            className="w-full rounded-lg border border-slate-200 bg-slate-50/60 pl-8 pr-7 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 text-xs text-slate-700 focus:bg-white focus:border-blue-500 focus:outline-none"
+          >
+            <option value="all">Semua Kategori</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -133,7 +230,7 @@ export function SpreadsheetTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80">
-              {items.map((item, index) => {
+              {filteredItems.map((item, index) => {
                 const isNeedsAttention =
                   item.confidence === "low" ||
                   !item.extractedData.totalAmount ||
@@ -389,7 +486,7 @@ export function SpreadsheetTable({
             <tfoot>
               <tr className="border-t-2 border-slate-300 bg-slate-100/90 font-bold text-slate-900">
                 <td colSpan={7} className="py-3 px-3 text-right uppercase tracking-wider text-slate-600 text-[11px]">
-                  Total Keseluruhan ({items.length} Dokumen):
+                  Total ({filteredItems.length} Baris):
                 </td>
                 <td className="py-3 px-3 text-right font-mono text-slate-800">
                   {formatCurrency(totalSubtotal)}
