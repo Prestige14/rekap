@@ -5,6 +5,7 @@ import { Navbar } from "@/components/Navbar";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { UploadZone } from "@/components/UploadZone";
 import { QueueProgress } from "@/components/QueueProgress";
+import { StatsCards } from "@/components/StatsCards";
 import { SpreadsheetTable } from "@/components/SpreadsheetTable";
 import { DocumentPreviewModal } from "@/components/DocumentPreviewModal";
 import { ActionBar } from "@/components/ActionBar";
@@ -311,6 +312,11 @@ export default function RekapApp() {
         {/* State 2: Queue & Progress indicator */}
         <section aria-label="Processing Queue">
           <QueueProgress items={items} isProcessing={isProcessing} />
+        </section>
+
+        {/* Overview Stats Cards */}
+        <section aria-label="Statistics Overview">
+          <StatsCards items={items} />
         </section>
 
         {/* State 3: Interactive Review Spreadsheet Table */}

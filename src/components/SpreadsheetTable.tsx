@@ -7,12 +7,14 @@ import {
   Plus,
   AlertTriangle,
   CheckCircle2,
-  FileText,
   FileSpreadsheet,
   Search,
   Filter,
   Calculator,
   X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { DocumentItem, ExtractedData } from "@/types/rekap";
 import { formatCurrency, cleanNumericValue } from "@/lib/utils";
@@ -24,6 +26,16 @@ interface SpreadsheetTableProps {
   onAddNewRow: () => void;
   onPreviewItem: (item: DocumentItem) => void;
 }
+
+type SortField =
+  | "fileName"
+  | "invoiceNumber"
+  | "vendorName"
+  | "issueDate"
+  | "totalAmount"
+  | "confidence"
+  | null;
+type SortDirection = "asc" | "desc";
 
 export function SpreadsheetTable({
   items,
@@ -39,6 +51,8 @@ export function SpreadsheetTable({
   const [tempValue, setTempValue] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
   const startEditing = (id: string, field: keyof ExtractedData, initialVal: any) => {
     setEditingCell({ id, field });
@@ -67,6 +81,20 @@ export function SpreadsheetTable({
       commitEditing(id, field);
     } else if (e.key === "Escape") {
       setEditingCell(null);
+    }
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortField(null);
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
     }
   };
 
@@ -132,10 +160,41 @@ export function SpreadsheetTable({
     return matchesSearch && matchesCategory;
   });
 
+  // Sort filtered items
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    if (!sortField) return 0;
+    const multiplier = sortDirection === "asc" ? 1 : -1;
+
+    if (sortField === "fileName") {
+      return a.fileName.localeCompare(b.fileName) * multiplier;
+    }
+    if (sortField === "confidence") {
+      const rank = { high: 3, medium: 2, low: 1 };
+      return ((rank[a.confidence] || 0) - (rank[b.confidence] || 0)) * multiplier;
+    }
+    if (sortField === "totalAmount") {
+      return ((a.extractedData.totalAmount || 0) - (b.extractedData.totalAmount || 0)) * multiplier;
+    }
+    const valA = String(a.extractedData[sortField] || "");
+    const valB = String(b.extractedData[sortField] || "");
+    return valA.localeCompare(valB) * multiplier;
+  });
+
   // Calculate summary metrics on filtered items
   const totalSubtotal = filteredItems.reduce((acc, i) => acc + (i.extractedData.subtotal || 0), 0);
   const totalTax = filteredItems.reduce((acc, i) => acc + (i.extractedData.tax || 0), 0);
   const grandTotal = filteredItems.reduce((acc, i) => acc + (i.extractedData.totalAmount || 0), 0);
+
+  const renderSortIndicator = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-70 transition" />;
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-3 w-3 text-blue-400" />
+    ) : (
+      <ArrowDown className="h-3 w-3 text-blue-400" />
+    );
+  };
 
   return (
     <div className="w-full space-y-3">
@@ -214,23 +273,79 @@ export function SpreadsheetTable({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1100px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-900 text-slate-100 font-semibold tracking-wide">
+              <tr className="border-b border-slate-200 bg-slate-900 text-slate-100 font-semibold tracking-wide select-none">
                 <th className="py-3 px-3 w-12 text-center">No</th>
-                <th className="py-3 px-3 w-44">Berkas Dokumen</th>
-                <th className="py-3 px-3 w-36">No. Invoice</th>
-                <th className="py-3 px-3 w-44">Vendor / Penerbit</th>
-                <th className="py-3 px-3 w-28">Tanggal</th>
+
+                <th
+                  onClick={() => handleSort("fileName")}
+                  className="py-3 px-3 w-44 cursor-pointer group hover:bg-slate-800 transition"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Berkas Dokumen</span>
+                    {renderSortIndicator("fileName")}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleSort("invoiceNumber")}
+                  className="py-3 px-3 w-36 cursor-pointer group hover:bg-slate-800 transition"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>No. Invoice</span>
+                    {renderSortIndicator("invoiceNumber")}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleSort("vendorName")}
+                  className="py-3 px-3 w-44 cursor-pointer group hover:bg-slate-800 transition"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Vendor / Penerbit</span>
+                    {renderSortIndicator("vendorName")}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleSort("issueDate")}
+                  className="py-3 px-3 w-28 cursor-pointer group hover:bg-slate-800 transition"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Tanggal</span>
+                    {renderSortIndicator("issueDate")}
+                  </div>
+                </th>
+
                 <th className="py-3 px-3 w-28">Jatuh Tempo</th>
                 <th className="py-3 px-3 w-32">Kategori</th>
                 <th className="py-3 px-3 w-32 text-right">Subtotal (Rp)</th>
                 <th className="py-3 px-3 w-28 text-right">Pajak (Rp)</th>
-                <th className="py-3 px-3 w-36 text-right">Total (Rp)</th>
-                <th className="py-3 px-3 w-24 text-center">Keyakinan</th>
+
+                <th
+                  onClick={() => handleSort("totalAmount")}
+                  className="py-3 px-3 w-36 text-right cursor-pointer group hover:bg-slate-800 transition"
+                >
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span>Total (Rp)</span>
+                    {renderSortIndicator("totalAmount")}
+                  </div>
+                </th>
+
+                <th
+                  onClick={() => handleSort("confidence")}
+                  className="py-3 px-3 w-24 text-center cursor-pointer group hover:bg-slate-800 transition"
+                >
+                  <div className="flex items-center justify-center gap-1.5">
+                    <span>Keyakinan</span>
+                    {renderSortIndicator("confidence")}
+                  </div>
+                </th>
+
                 <th className="py-3 px-3 w-20 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/80">
-              {filteredItems.map((item, index) => {
+              {sortedItems.map((item, index) => {
                 const isNeedsAttention =
                   item.confidence === "low" ||
                   !item.extractedData.totalAmount ||
